@@ -3,11 +3,17 @@
    Disposição do Catálogo e Carrinho (Sua Sacola) conforme projeto acadêmico
    ========================================================================== */
 
+import { fetchPublicCatalog } from './services/products.js';
+import { fetchPublishedCMS, applyPublishedCMS } from './services/cms.js';
+
+let XUKURU_PRODUCTS = [];
+let XUKURU_CATEGORIES = [];
+
 // ============================================================
 // ESTADO GLOBAL DA APLICAÇÃO
 // ============================================================
 const AppState = {
-  currentPage: 'catalog',
+  currentPage: 'home',
   cart: [],
   filters: {
     search: '',
@@ -33,6 +39,16 @@ const AppState = {
 // UTILIDADES
 // ============================================================
 const Utils = {
+  escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  },
+
+  safeImageUrl(value) {
+    const url = String(value || '').trim();
+    if (/^(https:\/\/|\.\.\/|\.\/|\/)/i.test(url)) return url;
+    return '';
+  },
+
   formatCurrency(val) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   },
@@ -79,9 +95,9 @@ const Utils = {
 // ============================================================
 const Cart = {
   add(productId, qty = 1) {
-    const product = XUKURU_PRODUCTS.find(p => p.id === productId);
-    if (!product) return;
-    const existing = AppState.cart.find(item => item.id === productId);
+    const product = XUKURU_PRODUCTS.find(p => String(p.id) === String(productId));
+    if (!product || product.stock < 1) { Toast.show('Este item não está disponível.', 'warn'); return; }
+    const existing = AppState.cart.find(item => String(item.id) === String(product.id));
     if (existing) {
       existing.qty = Math.min(existing.qty + qty, product.stock);
     } else {
@@ -94,8 +110,8 @@ const Cart = {
   },
 
   remove(productId) {
-    const removedItem = AppState.cart.find(item => item.id === productId);
-    AppState.cart = AppState.cart.filter(item => item.id !== productId);
+    const removedItem = AppState.cart.find(item => String(item.id) === String(productId));
+    AppState.cart = AppState.cart.filter(item => String(item.id) !== String(productId));
     this.persist();
     UI.updateCartBadge();
     UI.renderCartPage();
@@ -105,10 +121,10 @@ const Cart = {
   },
 
   updateQty(productId, delta) {
-    const item = AppState.cart.find(i => i.id === productId);
+    const item = AppState.cart.find(i => String(i.id) === String(productId));
     if (!item) return;
-    const product = XUKURU_PRODUCTS.find(p => p.id === productId);
-    const maxStock = product ? product.stock : 99;
+    const product = XUKURU_PRODUCTS.find(p => String(p.id) === String(productId));
+    const maxStock = product ? product.stock : 0;
     const newQty = item.qty + delta;
     if (newQty <= 0) {
       this.remove(productId);
@@ -130,7 +146,7 @@ const Cart = {
 
   persist() {
     try {
-      localStorage.setItem('xukuru_cart_demonstrative', JSON.stringify(AppState.cart));
+      localStorage.setItem('xukuru_cart_demonstrative', JSON.stringify(AppState.cart.map(item => ({ productId: String(item.id), qty: item.qty }))));
     } catch (e) { /* noop */ }
   },
 
@@ -138,17 +154,23 @@ const Cart = {
     try {
       const saved = localStorage.getItem('xukuru_cart_demonstrative');
       if (saved) {
-        AppState.cart = JSON.parse(saved);
+        const legacyItems = JSON.parse(saved);
+        let dropped = false;
+        AppState.cart = (Array.isArray(legacyItems) ? legacyItems : []).map(item => {
+          const oldId = item.productId ?? item.id;
+          const product = XUKURU_PRODUCTS.find(p => String(p.id) === String(oldId) || String(p.legacyId) === String(oldId));
+          if (!product || product.stock < 1) { dropped = true; return null; }
+          const quantity = Math.min(Math.max(1, Number(item.qty) || 1), product.stock);
+          return { ...product, qty: quantity };
+        }).filter(Boolean);
+        this.persist();
+        if (dropped) Toast.show('Itens indisponíveis foram removidos da sacola.', 'warn');
       } else {
-        const initialItem = XUKURU_PRODUCTS.find(p => p.id === 1);
-        if (initialItem) {
-          AppState.cart = [{ ...initialItem, qty: 1 }];
-          this.persist();
-        }
+        AppState.cart = [];
       }
     } catch (e) {
-      const initialItem = XUKURU_PRODUCTS.find(p => p.id === 1);
-      if (initialItem) AppState.cart = [{ ...initialItem, qty: 1 }];
+      AppState.cart = [];
+      try { localStorage.removeItem('xukuru_cart_demonstrative'); } catch (_) { /* noop */ }
     }
   }
 };
@@ -220,7 +242,7 @@ const Catalog = {
         break;
       case 'destaque':
       default:
-        items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || a.id - b.id);
+      items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     }
 
     return items;
@@ -232,7 +254,7 @@ const Catalog = {
 // ============================================================
 const UI = {
 
-  // ----- RENDERIZAR O CATÁLOGO (FOTO DA DIREITA) -----
+  // ----- RENDERIZAR O CATÁLOGO -----
   renderCatalog() {
     const grid = document.getElementById('catalog-products-grid');
     const counterEl = document.getElementById('catalog-results-count');
@@ -248,13 +270,14 @@ const UI = {
       grid.innerHTML = `
         <div class="catalog-empty-state">
           <div class="empty-icon">🔍</div>
-          <h3>Nenhuma referência encontrada</h3>
-          <p>Tente ajustar os filtros de categoria, faixa de valores ou termo de pesquisa.</p>
-          <button type="button" class="btn-filter-apply" onclick="UI.clearFilters()" style="margin-top:1rem; width:auto; display:inline-block;">
+          <h3>${XUKURU_PRODUCTS.length ? 'Nenhuma referência encontrada' : 'Catálogo indisponível'}</h3>
+          <p>${XUKURU_PRODUCTS.length ? 'Tente ajustar os filtros de categoria, faixa de valores ou termo de pesquisa.' : 'Os produtos publicados serão exibidos após a conexão com o Supabase e a aprovação necessária.'}</p>
+          <button type="button" data-clear-filters class="btn-filter-apply" style="margin-top:1rem; width:auto; display:inline-block;">
             Limpar todos os filtros
           </button>
         </div>
       `;
+      grid.querySelector('[data-clear-filters]')?.addEventListener('click', () => this.clearFilters());
       return;
     }
 
@@ -262,39 +285,32 @@ const UI = {
     this.bindCatalogCardEvents(grid);
   },
 
-  // Template do Card do Catálogo idêntico à Foto 2
+  // Template compartilhado pelo catálogo e pelos destaques da página inicial.
   renderCatalogCard(p) {
-    const themeLabel = p.theme || `TEMA DE PESQUISA • ${p.categoryName.toUpperCase()}`;
+    const e = Utils.escapeHtml;
+    const themeLabel = p.categoryName;
     const badgeFeaturedHtml = p.featured
       ? `<span class="product-tag badge-destaque">Destaque</span>`
       : '';
 
     return `
-      <article class="demonstrative-catalog-card" data-id="${p.id}" role="article" aria-label="${p.title}">
-        <!-- Moldura da Fotografia Pendente -->
+      <article class="demonstrative-catalog-card" data-id="${e(p.id)}" role="article" aria-label="${e(p.title)}">
         <div class="catalog-card-image-box">
           <div class="card-badges-row">
-            <span class="product-tag badge-referencia">Item de referência</span>
+            <span class="product-tag badge-referencia">Produto</span>
             ${badgeFeaturedHtml}
           </div>
-
-          <!-- Ícone e Ilustração Vetorial da Imagem Pendente -->
-          ${Utils.getPendingPhotoSVG('catalog')}
-
-          <!-- Legenda na base da moldura -->
-          <div class="card-image-bottom-caption">
-            FOTOGRAFIA AUTORIZADA DA PEÇA AINDA NÃO FORNECIDA.
-          </div>
+          ${Utils.safeImageUrl(p.image) ? `<img class="catalog-card-image" src="${e(Utils.safeImageUrl(p.image))}" alt="${e(p.imageAlt || p.title)}" loading="lazy" />` : Utils.getPendingPhotoSVG('catalog')}
         </div>
 
         <!-- Conteúdo do Card -->
         <div class="catalog-card-content">
-          <div class="catalog-card-theme">${themeLabel}</div>
+          <div class="catalog-card-theme">${e(themeLabel)}</div>
           <h2 class="catalog-card-title">
-            <a href="#" data-open-product="${p.id}">${p.title}</a>
+            <a href="#" data-open-product="${e(p.id)}">${e(p.title)}</a>
           </h2>
           <p class="catalog-card-description">
-            ${p.description}
+            ${e(p.description)}
           </p>
 
           <!-- Rodapé do Card -->
@@ -316,7 +332,7 @@ const UI = {
     container.querySelectorAll('[data-open-product]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
-        const id = parseInt(el.dataset.openProduct);
+        const id = el.dataset.openProduct;
         this.openProductModal(id);
       });
     });
@@ -354,54 +370,55 @@ const UI = {
           <div style="font-size:3rem; margin-bottom:1rem;">🛒</div>
           <h3 style="font-family:'Cinzel',serif; color:var(--color-primary); margin-bottom:0.5rem;">Sua sacola está vazia</h3>
           <p style="color:#666; margin-bottom:1.5rem;">Você ainda não adicionou nenhuma referência demonstrativa.</p>
-          <button type="button" class="btn-cart-checkout" onclick="UI.navigateTo('catalog')" style="max-width:240px;">
+          <button type="button" class="btn-cart-checkout" data-go-catalog style="max-width:240px;">
             Ir para o Catálogo
           </button>
         </div>
       `;
+      list.querySelector('[data-go-catalog]')?.addEventListener('click', () => UI.navigateTo('catalog'));
       return;
     }
 
     // Renderizar cada item da sacola com as preferências e visual da Foto da Direita
+    const e = Utils.escapeHtml;
     list.innerHTML = AppState.cart.map(item => {
-      const themeLabel = item.theme || `TEMA DE PESQUISA • ${item.categoryName.toUpperCase()}`;
+      const themeLabel = item.categoryName;
       const badgeFeaturedHtml = item.featured
         ? `<span class="product-tag badge-destaque">Destaque</span>`
         : '';
 
       return `
-        <article class="cart-item-row" data-cart-item="${item.id}">
-          <!-- Miniatura da Imagem Pendente -->
+        <article class="cart-item-row" data-cart-item="${e(item.id)}">
           <div class="cart-item-photo-wrapper">
             <div class="cart-item-photo-frame">
-              ${Utils.getPendingPhotoSVG('cart')}
+              ${Utils.safeImageUrl(item.image) ? `<img src="${e(Utils.safeImageUrl(item.image))}" alt="${e(item.imageAlt || item.title)}" loading="lazy" />` : Utils.getPendingPhotoSVG('cart')}
             </div>
             <div class="cart-item-photo-caption">
-              Fotografia autorizada da peça ainda não fornecida.
+              Foto do produto
             </div>
           </div>
 
           <!-- Dados Centrais do Item (Com Preferências da Foto da Direita) -->
           <div class="cart-item-details-wrapper">
             <div class="cart-item-badges-row">
-              <span class="product-tag badge-referencia">Item de referência</span>
+              <span class="product-tag badge-referencia">Produto</span>
               ${badgeFeaturedHtml}
             </div>
 
-            <div class="cart-item-theme-tag">${themeLabel}</div>
+            <div class="cart-item-theme-tag">${e(themeLabel)}</div>
 
             <h2 class="cart-item-title">
               <a href="#" class="cart-item-title-link" data-open-product="${item.id}">
-                ${item.title}
+                ${e(item.title)}
               </a>
             </h2>
 
             <div class="cart-item-category-meta">
-              ${item.categoryName} • referência visual
+              ${e(item.categoryName)} • referência visual
             </div>
 
             <p class="cart-item-demonstrative-desc">
-              ${item.description}
+              ${e(item.description)}
             </p>
 
             <div class="cart-item-price-reference">
@@ -410,7 +427,7 @@ const UI = {
 
             <div class="cart-item-remove-container">
               <button type="button" class="btn-remove-item-link" data-cart-remove="${item.id}">
-                Remover ${item.title}
+                Remover ${e(item.title)}
               </button>
             </div>
           </div>
@@ -419,7 +436,7 @@ const UI = {
           <div class="cart-item-actions-wrapper">
             <div class="cart-item-qty-section">
               <div class="qty-field-label">Quantidade</div>
-              <div class="cart-qty-stepper-box" role="group" aria-label="Alterar quantidade de ${item.title}">
+              <div class="cart-qty-stepper-box" role="group" aria-label="Alterar quantidade de ${e(item.title)}">
                 <button type="button" class="qty-stepper-btn" data-cart-decr="${item.id}" aria-label="Diminuir quantidade">−</button>
                 <span class="qty-stepper-number" aria-live="polite">${item.qty}</span>
                 <button type="button" class="qty-stepper-btn" data-cart-incr="${item.id}" aria-label="Aumentar quantidade">+</button>
@@ -436,28 +453,28 @@ const UI = {
 
     // Eventos dos botões da sacola
     list.querySelectorAll('[data-cart-decr]').forEach(btn => {
-      btn.addEventListener('click', () => Cart.updateQty(parseInt(btn.dataset.cartDecr), -1));
+      btn.addEventListener('click', () => Cart.updateQty(btn.dataset.cartDecr, -1));
     });
 
     list.querySelectorAll('[data-cart-incr]').forEach(btn => {
-      btn.addEventListener('click', () => Cart.updateQty(parseInt(btn.dataset.cartIncr), 1));
+      btn.addEventListener('click', () => Cart.updateQty(btn.dataset.cartIncr, 1));
     });
 
     list.querySelectorAll('[data-cart-remove]').forEach(btn => {
-      btn.addEventListener('click', () => Cart.remove(parseInt(btn.dataset.cartRemove)));
+      btn.addEventListener('click', () => Cart.remove(btn.dataset.cartRemove));
     });
 
     list.querySelectorAll('[data-open-product]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        UI.openProductModal(parseInt(btn.dataset.openProduct));
+        UI.openProductModal(btn.dataset.openProduct);
       });
     });
   },
 
   // ----- MODAL DE DETALHES DO PRODUTO -----
   openProductModal(productId) {
-    const p = XUKURU_PRODUCTS.find(x => x.id === productId);
+    const p = XUKURU_PRODUCTS.find(x => String(x.id) === String(productId));
     if (!p) return;
     AppState.openProductId = productId;
 
@@ -465,27 +482,23 @@ const UI = {
     const content = document.getElementById('product-modal-content');
     if (!modal || !content) return;
 
+    const e = Utils.escapeHtml;
+    const gallery = (p.gallery || []).filter(Utils.safeImageUrl).map((url, index) => `<img src="${e(Utils.safeImageUrl(url))}" alt="${e(p.title)} — imagem ${index + 1}" loading="lazy" />`).join('');
     content.innerHTML = `
       <button class="modal-close-btn" id="modal-close-btn" aria-label="Fechar detalhes">✕</button>
       <div class="product-modal-grid">
         <div class="modal-gallery">
-          <div class="modal-main-image-placeholder">
-            <div class="card-badges-row" style="position:static; margin-bottom:1rem; display:flex; gap:0.5rem;">
-              <span class="product-tag badge-referencia">Item de referência</span>
-              ${p.featured ? '<span class="product-tag badge-destaque">Destaque</span>' : ''}
-            </div>
-            ${Utils.getPendingPhotoSVG('catalog')}
-            <p style="font-size:0.75rem; color:#777; margin-top:1rem; text-align:center;">
-              Fotografia autorizada da peça ainda não fornecida pelo artesão ou aldeia.
-            </p>
+          <div class="modal-main-image">
+            ${Utils.safeImageUrl(p.image) ? `<img src="${e(Utils.safeImageUrl(p.image))}" alt="${e(p.imageAlt || p.title)}" />` : Utils.getPendingPhotoSVG('catalog')}
           </div>
+          ${gallery ? `<div class="modal-thumbnail-gallery">${gallery}</div>` : ''}
         </div>
         <div class="modal-product-info">
-          <div class="modal-category-tag">${p.theme || 'TEMA DE PESQUISA • ' + p.categoryName.toUpperCase()}</div>
-          <h2 class="modal-product-title">${p.title}</h2>
+          <div class="modal-category-tag">${e(p.categoryName)}</div>
+          <h2 class="modal-product-title">${e(p.title)}</h2>
           <div class="modal-artisan-village">
-            <span>📚</span>
-            <strong>${p.artisan}</strong> — ${p.village}
+            <span>🏷️</span>
+            <strong>${e(p.artisan)}</strong> — ${e(p.village)}
           </div>
 
           <div class="modal-price-box">
@@ -496,18 +509,18 @@ const UI = {
           </div>
 
           <div class="modal-tab-desc">
-            <h4>📖 Ficha Demonstrativa de Pesquisa</h4>
-            <p>${p.description}</p>
+            <h4>📖 Sobre o produto</h4>
+            <p>${e(p.description)}</p>
           </div>
 
           <div class="modal-tab-desc">
-            <h4>🌿 Materiais Referenciais</h4>
-            <p>${p.materials}</p>
+            <h4>🌿 Composição e materiais</h4>
+            <p>${e(p.materials)}</p>
           </div>
 
           <div class="modal-tab-desc">
-            <h4>📐 Dimensões Estimadas</h4>
-            <p>${p.dimensions} | Peso: ${p.weight}</p>
+            <h4>📐 Dimensões e peso</h4>
+            <p>${e(p.dimensions)} | Peso: ${e(p.weight)}</p>
           </div>
 
           <div class="modal-actions-bar" style="margin-top:1.5rem;">
@@ -571,7 +584,7 @@ const UI = {
     } else if (page === 'home') {
       const homeGrid = document.getElementById('home-products-grid');
       if (homeGrid) {
-        homeGrid.innerHTML = XUKURU_PRODUCTS.slice(0, 3).map(p => this.renderCatalogCard(p)).join('');
+        homeGrid.innerHTML = XUKURU_PRODUCTS.filter(p => p.featured).slice(0, 3).map(p => this.renderCatalogCard(p)).join('');
         this.bindCatalogCardEvents(homeGrid);
       }
     }
@@ -663,7 +676,28 @@ const Checkout = {
 // ============================================================
 // INICIALIZAÇÃO DA APLICAÇÃO
 // ============================================================
-function initApp() {
+async function initApp() {
+  const status = document.getElementById('site-data-status');
+  try {
+    const catalog = await fetchPublicCatalog();
+    XUKURU_PRODUCTS = catalog.products;
+    XUKURU_CATEGORIES = catalog.categories;
+    const categorySelect = document.getElementById('filter-category-select');
+    if (categorySelect) {
+      categorySelect.innerHTML = '<option value="todos">Todas as categorias</option>' + XUKURU_CATEGORIES.map(c => `<option value="${Utils.escapeHtml(c.slug)}">${Utils.escapeHtml(c.name)}</option>`).join('');
+    }
+    const cms = await fetchPublishedCMS();
+    applyPublishedCMS(cms);
+  } catch (error) {
+    XUKURU_PRODUCTS = [];
+    XUKURU_CATEGORIES = [];
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Catálogo indisponível: conecte o Supabase e execute as migrações para exibir somente produtos publicados e autorizados.';
+      status.setAttribute('role', 'status');
+    }
+    console.warn('A vitrine não conseguiu carregar dados publicados do Supabase.', error?.message || '');
+  }
   Cart.restore();
   UI.updateCartBadge();
 
@@ -806,7 +840,8 @@ function initApp() {
     }
   });
 
-  UI.navigateTo('catalog');
+  UI.navigateTo('home');
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp, { once: true });
+else initApp();

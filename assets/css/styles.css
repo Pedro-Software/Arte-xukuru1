@@ -4,6 +4,8 @@
    ========================================================================== */
 
 :root {
+  --font-body: 'Outfit';
+  --font-heading: 'Cinzel';
   /* Paleta Oficial do Briefing */
   --color-primary: #1F3E2B;         /* Verde Mata / Floresta (Navbar, Rodapé, Títulos) */
   --color-primary-light: #2D583E;
@@ -47,6 +49,50 @@
   padding: 0;
   box-sizing: border-box;
 }
+[hidden] { display: none !important; }
+[data-section-key][hidden] { display: none !important; }
+.site-logo-image { width:34px; height:34px; object-fit:contain; }
+
+h1, h2, h3, .hero-title, .section-title, .purpose-title, .cart-page-title {
+  font-family: var(--font-heading), 'Cinzel', serif;
+}
+
+#site-data-status:not([hidden]) {
+  margin: 18px auto;
+  padding: 12px 16px;
+  color: #684b12;
+  background: #fff3d4;
+  border: 1px solid #efd38c;
+  border-radius: var(--radius-sm);
+}
+
+.image-pending-placeholder {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  color: var(--color-primary);
+  text-align: center;
+  background: linear-gradient(135deg, #efe7d9, #f8f5ef);
+  border: 1px dashed var(--color-border-dark);
+  border-radius: var(--radius-md);
+}
+
+.modal-thumbnail-gallery { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; }
+.modal-thumbnail-gallery img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; }
+[data-layout="text-left"] { text-align: left; }
+[data-layout="text-right"] { text-align: right; }
+[data-layout="two-columns"] { column-count: 2; column-gap: 2rem; }
+[data-layout="cards-2"] .values-grid, [data-layout="cards-2"] .trust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+[data-layout="cards-3"] .values-grid, [data-layout="cards-3"] .trust-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+[data-layout="cards-4"] .values-grid, [data-layout="cards-4"] .trust-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+@media (max-width: 700px) { [data-layout="two-columns"] { column-count: 1; } }
+:root[data-theme-layout="cards-2"] .values-grid, :root[data-theme-layout="cards-2"] .trust-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+:root[data-theme-layout="cards-3"] .values-grid, :root[data-theme-layout="cards-3"] .trust-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+:root[data-theme-layout="cards-4"] .values-grid, :root[data-theme-layout="cards-4"] .trust-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+:root[data-theme-layout="text-left"] .hero-content, :root[data-theme-layout="text-left"] .about-hero .container, :root[data-theme-layout="text-left"] .history-hero .container { text-align:left; }
+:root[data-theme-layout="text-right"] .hero-content, :root[data-theme-layout="text-right"] .about-hero .container, :root[data-theme-layout="text-right"] .history-hero .container { text-align:right; }
+@media (max-width:700px) { :root[data-theme-layout="cards-3"] .trust-grid, :root[data-theme-layout="cards-3"] .values-grid, :root[data-theme-layout="cards-4"] .trust-grid, :root[data-theme-layout="cards-4"] .values-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 
 html {
   scroll-behavior: smooth;
@@ -54,7 +100,7 @@ html {
 }
 
 body {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: var(--color-bg);
   color: var(--color-text);
   line-height: 1.6;
@@ -347,8 +393,8 @@ button {
   position: relative;
   min-height: 90vh;
   margin-top: var(--navbar-height);
-  background: linear-gradient(180deg, rgba(31, 62, 43, 0.85) 0%, rgba(31, 62, 43, 0.65) 60%, rgba(31, 62, 43, 0.95) 100%),
-              url('../images/hero.jpg') center/cover no-repeat;
+  background: radial-gradient(ellipse at 72% 28%, rgba(217,155,38,.25), transparent 34%),
+              linear-gradient(145deg, #1F3E2B 0%, #2D583E 55%, #14281C 100%);
   display: flex;
   align-items: center;
   color: #FFFFFF;
@@ -1118,6 +1164,15 @@ button {
   overflow: hidden;
 }
 
+.catalog-card-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.4rem;
+}
+
 .card-badges-row {
   position: absolute;
   top: 10px;
@@ -1127,6 +1182,7 @@ button {
   justify-content: space-between;
   align-items: center;
   pointer-events: none;
+  z-index: 1;
 }
 
 .product-tag {
@@ -1356,8 +1412,10 @@ button {
   overflow: hidden;
 }
 
-.cart-item-photo-frame .pending-photo-box {
-  transform: scale(0.85);
+.cart-item-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .cart-item-photo-caption {
@@ -1791,8 +1849,8 @@ button {
   content: "";
   position: absolute;
   inset: 0;
-  background: url('../images/serra_ororuba.jpg') center/cover no-repeat;
-  opacity: 0.22;
+  background: radial-gradient(circle at 50% 0%, rgba(217,155,38,.45), transparent 65%);
+  opacity: 0.8;
 }
 
 .about-hero .container,
@@ -2217,13 +2275,13 @@ button {
   aspect-ratio: 1;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background-color: var(--color-bg);
+  background-color: #EDE8DF;
 }
 
 .modal-main-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .modal-thumbnails {
@@ -3001,24 +3059,6 @@ button {
   100% { opacity: 1; }
 }
 
-/* Partícula decorativa flutuante no hero */
-.hero-section::after {
-  content: "✦";
-  position: absolute;
-  top: 18%;
-  right: 12%;
-  font-size: 3rem;
-  color: rgba(217, 155, 38, 0.25);
-  animation: floatStar 6s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 1;
-}
-
-@keyframes floatStar {
-  0%, 100% { transform: translateY(0) rotate(0deg);   opacity: 0.3; }
-  50%       { transform: translateY(-20px) rotate(20deg); opacity: 0.6; }
-}
-
 /* Aprimoramento da hero tag — brilho animado */
 .hero-tag {
   position: relative;
@@ -3177,17 +3217,6 @@ button {
 .site-footer {
   background: linear-gradient(160deg, #1F3E2B 0%, #14281C 50%, #0E1E14 100%);
   position: relative;
-}
-
-.site-footer::before {
-  content: "✦";
-  position: absolute;
-  top: 3rem;
-  right: 5%;
-  font-size: 6rem;
-  color: rgba(217, 155, 38, 0.06);
-  pointer-events: none;
-  font-family: 'Cinzel', serif;
 }
 
 /* Borda decorativa animada no topo do footer */
