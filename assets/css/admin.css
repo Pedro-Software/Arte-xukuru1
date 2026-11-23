@@ -21,7 +21,7 @@ button { cursor: pointer; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .admin-login-wrap { min-height: 100vh; min-height: 100svh; display: grid; grid-template-columns: minmax(0,1.08fr) minmax(420px,.92fr); background: var(--admin-bg); }
 .login-visual { position: relative; z-index: 0; isolation: isolate; min-height: 100vh; min-height: 100svh; overflow: hidden; padding: clamp(30px,5vw,76px); display: flex; flex-direction: column; justify-content: space-between; color: #fff; background: #1f3e2b; }
-.login-visual-image { position: absolute; z-index: -2; inset: 0; background: url('../images/hero.jpg') center 54%/cover no-repeat; transform: scale(1.035); animation: login-image-arrive 1.1s cubic-bezier(.2,.7,.2,1) both; }
+.login-visual-image { position: absolute; z-index: -2; inset: 0; background: url('../../imgs/WhatsApp Image 2026-09-02 at 08.42.18 (4).jpeg') center 54%/cover no-repeat; transform: scale(1.035); animation: login-image-arrive 1.1s cubic-bezier(.2,.7,.2,1) both; }
 .login-visual::after { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(112deg,rgba(15,35,24,.88) 0%,rgba(18,42,28,.68) 48%,rgba(18,42,28,.3) 100%),linear-gradient(0deg,rgba(14,29,21,.7),transparent 48%); }
 .login-visual-shape { position: absolute; z-index: -1; pointer-events: none; border: 1px solid rgba(246,224,177,.2); border-radius: 50%; transform: rotate(-22deg); }
 .login-visual-shape-one { width: min(70vw,760px); height: min(70vw,760px); right: -34%; top: 19%; }

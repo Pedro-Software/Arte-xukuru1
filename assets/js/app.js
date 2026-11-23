@@ -1,3 +1,4 @@
+import { resolveLocalImage } from './services/localImages.js';
 /* ==========================================================================
    ARTE XUKURU DO ORORUBÁ - APLICAÇÃO JAVASCRIPT PRINCIPAL
    Disposição do Catálogo e Carrinho (Sua Sacola) conforme projeto acadêmico
@@ -44,9 +45,7 @@ const Utils = {
   },
 
   safeImageUrl(value) {
-    const url = String(value || '').trim();
-    if (/^(https:\/\/|\.\.\/|\.\/|\/)/i.test(url)) return url;
-    return '';
+    return resolveLocalImage(value);
   },
 
   formatCurrency(val) {

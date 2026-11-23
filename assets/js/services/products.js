@@ -1,3 +1,4 @@
+import { localProductImages, resolveLocalImage } from './localImages.js';
 import { requireSupabase } from '../lib/supabaseClient.js';
 
 export async function fetchPublicCatalog() {
@@ -12,15 +13,13 @@ export async function fetchPublicCatalog() {
   const imageGroups = new Map();
   for (const image of imagesResult.data || []) {
     const list = imageGroups.get(image.product_id) || [];
-    const url = image.storage_bucket === 'xukuru-public'
-      ? client.storage.from('xukuru-public').getPublicUrl(image.storage_path).data.publicUrl
-      : '';
+    const url = resolveLocalImage(image.storage_path);
     if (url) list.push({ ...image, url });
     imageGroups.set(image.product_id, list);
   }
   const products = (productsResult.data || []).map(row => {
     const gallery = imageGroups.get(row.id) || [];
-    const cover = gallery.find(image => image.is_cover) || gallery[0];
+    const cover = localProductImages[row.legacy_id] || gallery.find(image => image.is_cover) || gallery[0];
     return {
       id: row.id,
       legacyId: row.legacy_id,
@@ -32,8 +31,8 @@ export async function fetchPublicCatalog() {
       artisan: row.artisan || 'Não informado',
       village: row.village || 'Não informado',
       image: cover?.url || '',
-      imageAlt: cover?.alt_text || row.image_alt || row.title,
-      gallery: gallery.map(image => image.url),
+      imageAlt: cover?.alt || cover?.alt_text || row.image_alt || row.title,
+      gallery: [...new Set([cover?.url, ...gallery.map(image => image.url)].filter(Boolean))],
       materials: row.materials || 'Não informado',
       description: row.description || row.short_description || '',
       dimensions: row.dimensions || 'Não informadas',

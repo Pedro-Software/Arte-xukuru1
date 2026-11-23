@@ -1,3 +1,4 @@
+import { resolveLocalImage } from './localImages.js';
 import { requireSupabase, supabaseConfig } from '../lib/supabaseClient.js';
 
 export function isApprovedMediaUrl(value) {
@@ -47,8 +48,8 @@ export function applyPublishedCMS({ sections = [], settings = [] }) {
       if (!nodes.length || typeof value !== 'string') continue;
       for (const node of nodes) {
         if (/\.(image|image_url)$/.test(key)) {
-          if (isApprovedMediaUrl(value)) {
-            node.setAttribute('src', value); node.hidden = false;
+          if (resolveLocalImage(value)) {
+            node.setAttribute('src', resolveLocalImage(value)); node.hidden = false;
             node.parentElement?.querySelector('.image-pending-placeholder')?.setAttribute('hidden', '');
           }
         } else if (/\.(href|url)$/.test(key)) {
@@ -73,15 +74,15 @@ export function applyPublishedCMS({ sections = [], settings = [] }) {
     const images = section.published_content?.images || {};
     for (const [key, value] of Object.entries(images)) {
       const node = document.querySelector(`[data-cms-image-key="${CSS.escape(key)}"]`);
-      if (!node || typeof value !== 'string' || !isApprovedMediaUrl(value)) continue;
-      node.setAttribute('src', value);
+      if (!node || typeof value !== 'string' || !resolveLocalImage(value)) continue;
+      node.setAttribute('src', resolveLocalImage(value));
       node.hidden = false;
       node.parentElement?.querySelector('.image-pending-placeholder')?.setAttribute('hidden', '');
     }
     const imageAlt = section.published_content?.image_alt || {};
     for (const [key, value] of Object.entries(imageAlt)) {
       const node = document.querySelector(`[data-cms-image-key="${CSS.escape(key)}"]`);
-      if (node && typeof value === 'string') node.setAttribute('alt', value.slice(0, 300));
+      if (node && typeof value === 'string' && resolveLocalImage(images[key] || fields[key])) node.setAttribute('alt', value.slice(0, 300));
     }
     const layout = section.published_style?.layout;
     if (layout && /^[a-z0-9-]+$/.test(layout)) {
@@ -129,12 +130,12 @@ export function applyPublishedCMS({ sections = [], settings = [] }) {
         if (node && typeof value === 'string') node.textContent = value;
       }
       const logo = document.querySelector('[data-cms-setting="identity.logo_url"]');
-      if (logo && typeof setting.published_value?.logo_url === 'string' && isApprovedMediaUrl(setting.published_value.logo_url)) {
-        logo.src = setting.published_value.logo_url; logo.alt = setting.published_value.name ? `Marca ${setting.published_value.name}` : 'Marca da vitrine'; logo.hidden = false;
+      if (logo && typeof setting.published_value?.logo_url === 'string' && resolveLocalImage(setting.published_value.logo_url)) {
+        logo.src = resolveLocalImage(setting.published_value.logo_url); logo.alt = setting.published_value.name ? `Marca ${setting.published_value.name}` : 'Marca da vitrine'; logo.hidden = false;
       }
-      const favicon = document.querySelector('link[rel="icon"][type="image/svg+xml"]');
-      if (favicon && typeof setting.published_value?.favicon_url === 'string' && isApprovedMediaUrl(setting.published_value.favicon_url)) {
-        favicon.href = setting.published_value.favicon_url; favicon.type = 'image/png';
+      const favicon = document.querySelector('link[rel="icon"]');
+      if (favicon && typeof setting.published_value?.favicon_url === 'string' && resolveLocalImage(setting.published_value.favicon_url)) {
+        favicon.href = resolveLocalImage(setting.published_value.favicon_url); favicon.type = 'image/jpeg';
       }
     }
     if (setting.key === 'contacts') {
