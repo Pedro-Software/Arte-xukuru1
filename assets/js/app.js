@@ -269,8 +269,8 @@ const UI = {
       grid.innerHTML = `
         <div class="catalog-empty-state">
           <div class="empty-icon">🔍</div>
-          <h3>${XUKURU_PRODUCTS.length ? 'Nenhuma referência encontrada' : 'Catálogo indisponível'}</h3>
-          <p>${XUKURU_PRODUCTS.length ? 'Tente ajustar os filtros de categoria, faixa de valores ou termo de pesquisa.' : 'Os produtos publicados serão exibidos após a conexão com o Supabase e a aprovação necessária.'}</p>
+          <h3>${XUKURU_PRODUCTS.length ? 'Nenhuma referência encontrada' : 'Nenhum produto disponível'}</h3>
+          <p>${XUKURU_PRODUCTS.length ? 'Tente ajustar os filtros de categoria, faixa de valores ou termo de pesquisa.' : 'Não há produtos para exibir no momento. Se houver um aviso de conexão acima, atualize a página para tentar novamente.'}</p>
           <button type="button" data-clear-filters class="btn-filter-apply" style="margin-top:1rem; width:auto; display:inline-block;">
             Limpar todos os filtros
           </button>
@@ -685,17 +685,21 @@ async function initApp() {
     if (categorySelect) {
       categorySelect.innerHTML = '<option value="todos">Todas as categorias</option>' + XUKURU_CATEGORIES.map(c => `<option value="${Utils.escapeHtml(c.slug)}">${Utils.escapeHtml(c.name)}</option>`).join('');
     }
-    const cms = await fetchPublishedCMS();
-    applyPublishedCMS(cms);
   } catch (error) {
     XUKURU_PRODUCTS = [];
     XUKURU_CATEGORIES = [];
     if (status) {
       status.hidden = false;
-      status.textContent = 'Catálogo indisponível: conecte o Supabase e execute as migrações para exibir somente produtos publicados e autorizados.';
+      status.textContent = 'Não foi possível carregar o catálogo. Verifique sua conexão e atualize a página.';
       status.setAttribute('role', 'status');
     }
     console.warn('A vitrine não conseguiu carregar dados publicados do Supabase.', error?.message || '');
+  }
+  try {
+    const cms = await fetchPublishedCMS();
+    applyPublishedCMS(cms);
+  } catch (error) {
+    console.warn('Os textos publicados não puderam ser carregados; mantendo o conteúdo local.', error?.message || '');
   }
   Cart.restore();
   UI.updateCartBadge();

@@ -6,8 +6,6 @@ Vitrine demonstrativa com catálogo carregado do Supabase e painel administrativ
 
 ```powershell
 npm install
-Copy-Item .env.example .env.local
-# Edite .env.local com a URL do projeto e a publishable key do Supabase
 npm run dev
 ```
 
@@ -18,7 +16,9 @@ npm run build
 npm run preview
 ```
 
-O painel exige variáveis do Supabase, conta criada em Authentication e papel ativo na tabela `admin_users`. Veja o [guia de configuração do Supabase](docs/SUPABASE_SETUP.md) e o [guia do painel](docs/PAINEL_ADMIN.md).
+A URL e a publishable key do projeto ficam em `assets/js/lib/supabasePublicConfig.js`, incluído no GitHub e no build. O Live Server também pode abrir `index.html` e `admin.html`; nesse caso, a biblioteca Supabase é carregada pelo import map. Para usar outro projeto com Vite, defina o par `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` em `.env.local` ou nas variáveis da Vercel e gere um novo build. O arquivo `.env.local` não é enviado ao GitHub.
+
+O painel exige conta criada em Authentication e papel ativo na tabela `admin_users`. Veja o [guia de configuração do Supabase](docs/SUPABASE_SETUP.md) e o [guia do painel](docs/PAINEL_ADMIN.md).
 
 ## Dados e segurança
 

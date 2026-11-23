@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import { publicSupabaseConfig } from './supabasePublicConfig.js';
 
-const url = import.meta.env.VITE_SUPABASE_URL?.trim();
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+const env = import.meta.env || {};
+const envUrl = env.VITE_SUPABASE_URL?.trim();
+const envKey = env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+// Use a mesma origem para o par URL/chave; um override incompleto não mistura projetos.
+const hasEnvironmentConfig = Boolean(envUrl && envKey && !envUrl.includes('SEU_PROJETO') && !envKey.includes('SUBSTITUA'));
+const { url, key } = hasEnvironmentConfig ? { url: envUrl, key: envKey } : publicSupabaseConfig;
 
 export const supabaseConfig = {
   configured: Boolean(url && key && !url.includes('SEU_PROJETO') && !key.includes('SUBSTITUA')),
@@ -16,6 +21,6 @@ export const supabase = supabaseConfig.configured
   : null;
 
 export function requireSupabase() {
-  if (!supabase) throw new Error('Conexão Supabase não configurada. Preencha URL e publishable key em .env.local e reinicie o Vite.');
+  if (!supabase) throw new Error('Conexão Supabase não configurada. Confira assets/js/lib/supabasePublicConfig.js ou as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.');
   return supabase;
 }

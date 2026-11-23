@@ -47,7 +47,7 @@ function renderLogin(message='', reset=false) {
      <h1 id="login-heading">${reset?'Definir nova senha':'Boas-vindas'}</h1>
      <p>${reset?'Escolha uma nova senha para sua conta de operador.':'Entre com sua conta autorizada para continuar.'}</p>
     </div>
-    ${!supabaseConfig.configured?'<div class="notice">Supabase não configurado. Preencha URL e publishable key em .env.local e reinicie o Vite.</div>':''}
+    ${!supabaseConfig.configured?'<div class="notice">Confira a URL e a chave pública em assets/js/lib/supabasePublicConfig.js ou nas variáveis do projeto.</div>':''}
     ${message?'<div class="form-error" role="alert">'+esc(message)+'</div>':''}
     <form id="login-form" class="admin-form login-form">
      ${reset?'<label for="login-password">Nova senha<input id="login-password" name="password" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn btn-primary login-submit" type="submit">Salvar senha <span aria-hidden="true">→</span></button>':'<label for="login-email">E-mail<input id="login-email" name="email" type="email" autocomplete="username" placeholder="voce@exemplo.com" required></label><label for="login-password">Senha<input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required></label><button class="btn btn-primary login-submit" type="submit">Entrar no painel <span aria-hidden="true">→</span></button><button class="text-button login-reset" type="button" data-action="reset">Esqueci minha senha</button>'}
