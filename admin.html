@@ -4,11 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#1F3E2B" />
+  <script>
+    (() => {
+      let preference;
+      try { preference = localStorage.getItem('xukuru_admin_theme'); } catch {}
+      const dark = preference === 'dark' || (preference !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.adminTheme = dark ? 'dark' : 'light';
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+    })();
+  </script>
   <title>Administração | Arte Xukuru do Ororubá</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/admin.css" />
+  <link rel="stylesheet" href="assets/css/admin-theme.css" />
 </head>
 <body class="admin-body">
   <div id="admin-root" aria-live="polite">
@@ -19,5 +29,6 @@
     {"imports":{"@supabase/supabase-js":"https://esm.sh/@supabase/supabase-js@2.119.0"}}
   </script>
   <script type="module" src="assets/js/admin/admin.js"></script>
+  <script type="module" src="assets/js/admin/theme.js"></script>
 </body>
 </html>

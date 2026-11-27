@@ -1,4 +1,5 @@
 import { supabase, supabaseConfig, requireSupabase } from '../lib/supabaseClient.js';
+import { themeToggleMarkup } from './theme.js';
 import { signIn, getOperator, signOut, requestPasswordReset } from '../services/auth.js';
 import { isApprovedMediaUrl } from '../services/cms.js';
 import { SAFE_LAYOUTS, SAFE_FONTS, slugify, validateProduct, validateImage, validateTheme } from '../services/validation.js';
@@ -38,6 +39,7 @@ function renderLogin(message='', reset=false) {
   </section>
   <section class="login-panel" aria-labelledby="login-heading">
    <div class="login-card">
+    <div class="login-theme-tools">${themeToggleMarkup()}</div>
     <a class="login-brand login-brand-mobile" href="./" aria-label="Arte Xukuru do Ororubá, voltar ao site">
      <span class="login-mark" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="1.4"/><path d="M9 30c5.4-7.8 10.2-7.8 15 0s9.6 7.8 15 0M10 35h28M14 18l4-4 4 4M26 15l3-3 3 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span>
      <span class="login-brand-name">Arte Xukuru<small>do Ororubá</small></span>
@@ -52,6 +54,7 @@ function renderLogin(message='', reset=false) {
     <form id="login-form" class="admin-form login-form">
      ${reset?'<label for="login-password">Nova senha<input id="login-password" name="password" type="password" minlength="8" autocomplete="new-password" required></label><button class="btn btn-primary login-submit" type="submit">Salvar senha <span aria-hidden="true">→</span></button>':'<label for="login-email">E-mail<input id="login-email" name="email" type="email" autocomplete="username" placeholder="voce@exemplo.com" required></label><label for="login-password">Senha<input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required></label><button class="btn btn-primary login-submit" type="submit">Entrar no painel <span aria-hidden="true">→</span></button><button class="text-button login-reset" type="button" data-action="reset">Esqueci minha senha</button>'}
     </form>
+    <div id="login-recovery-status" class="notice" role="status" aria-live="polite" hidden></div>
     <div class="login-security"><span class="login-security-icon" aria-hidden="true">●</span><p>Acesso restrito a operadores autorizados.<br><strong>Não há cadastro público.</strong></p></div>
     <footer class="login-card-footer">ARTE XUKURU DO ORORUBÁ <span>·</span> GESTÃO RESPONSÁVEL</footer>
    </div>
@@ -61,7 +64,7 @@ function renderLogin(message='', reset=false) {
 function shell() {
  const nav=[['dashboard','◫'],['products','▦'],['categories','◇'],['content','▤'],['appearance','◐'],['media','▧'],['settings','⚙']];
  if(admin())nav.push(['history','◷']);
- root.innerHTML='<div class="admin-shell"><aside id="admin-sidebar" class="admin-sidebar"><div class="admin-brand">Arte Xukuru<small>Gestão de conteúdo</small></div><nav class="admin-nav" aria-label="Menu administrativo">'+nav.map(x=>'<button type="button" data-action="module" data-value="'+x[0]+'" class="'+(state.module===x[0]?'active':'')+'">'+x[1]+' &nbsp; '+labels[x[0]]+'</button>').join('')+'</nav><div class="admin-side-bottom"><a href="./" target="_blank" rel="noopener">↗ Abrir site público</a><p>'+esc(state.operator.user.email||'')+'</p><button class="btn btn-quiet" data-action="logout">Sair</button></div></aside><main class="admin-main"><header class="admin-topbar"><div class="button-row"><button class="btn btn-quiet mobile-nav-toggle" data-action="toggle-nav" aria-label="Abrir menu">☰</button><h1>'+labels[state.module]+'</h1></div><div class="operator-chip"><span>'+(admin()?'Administrador':'Editor')+' · '+esc(state.operator.user.email||'')+'</span><button class="btn btn-quiet" data-action="logout">Sair</button></div></header><section id="admin-content" class="admin-content"><div class="admin-loading"><span class="spinner"></span><p>Carregando…</p></div></section></main></div>';
+ root.innerHTML='<div class="admin-shell"><aside id="admin-sidebar" class="admin-sidebar"><div class="admin-brand">Arte Xukuru<small>Gestão de conteúdo</small></div><nav class="admin-nav" aria-label="Menu administrativo">'+nav.map(x=>'<button type="button" data-action="module" data-value="'+x[0]+'" class="'+(state.module===x[0]?'active':'')+'">'+x[1]+' &nbsp; '+labels[x[0]]+'</button>').join('')+'</nav><div class="admin-side-bottom"><a href="./" target="_blank" rel="noopener">↗ Abrir site público</a><p>'+esc(state.operator.user.email||'')+'</p><button class="btn btn-quiet" data-action="logout">Sair</button></div></aside><main class="admin-main"><header class="admin-topbar"><div class="button-row"><button class="btn btn-quiet mobile-nav-toggle" data-action="toggle-nav" aria-label="Abrir menu">☰</button><h1>'+labels[state.module]+'</h1></div><div class="operator-chip">'+themeToggleMarkup()+'<span>'+(admin()?'Administrador':'Editor')+' · '+esc(state.operator.user.email||'')+'</span><button class="btn btn-quiet" data-action="logout">Sair</button></div></header><section id="admin-content" class="admin-content"><div class="admin-loading"><span class="spinner"></span><p>Carregando…</p></div></section></main></div>';
  loadModule().catch(showError);
 }
 function showError(err) {
@@ -486,7 +489,18 @@ root.addEventListener('submit',async e=>{
 root.addEventListener('click',async e=>{
  const b=e.target.closest('[data-action]');if(!b)return;const action=b.dataset.action,id=b.dataset.id,value=b.dataset.value;
  try{
-  if(action==='reset'){const email=$('input[name="email"]')?.value.trim();if(!email){renderLogin('Digite seu e-mail antes de pedir a recuperação.');return;}await requestPasswordReset(email,location.origin+location.pathname+'?reset=1');toast('Se a conta existir, o Supabase enviará um link.');}
+  if(action==='reset'){
+   const input=$('input[name="email"]'),status=$('#login-recovery-status');
+   if(!input?.reportValidity())return;
+   b.disabled=true;b.textContent='Enviando…';
+   status.hidden=false;status.textContent='Solicitando o link de recuperação…';
+   try{
+    await requestPasswordReset(input.value.trim(),location.origin+location.pathname+'?reset=1');
+    status.textContent='Se a conta existir e puder receber e-mails, você receberá um link. Confira também a pasta de spam.';
+   }catch(err){status.textContent=errorText(err);}
+   finally{b.disabled=false;b.textContent='Esqueci minha senha';}
+   return;
+  }
   if(action==='logout'){if((state.sectionDirty||state.productDirty)&&!confirm('Descartar alterações não salvas e sair?'))return;state.sectionDirty=false;state.productDirty=false;await logout();}
   if(action==='module'){if((state.sectionDirty||state.productDirty)&&!confirm('Descartar alterações não salvas?'))return;state.sectionDirty=false;state.productDirty=false;state.module=value;shell();}
   if(action==='toggle-nav')$('#admin-sidebar').classList.toggle('open');

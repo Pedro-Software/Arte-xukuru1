@@ -34,5 +34,21 @@ export async function signOut() {
 
 export async function requestPasswordReset(email, redirectTo) {
   const { error } = await requireSupabase().auth.resetPasswordForEmail(email, { redirectTo });
-  if (error) throw new Error('Não foi possível enviar o link. Confira o e-mail e as URLs permitidas no Supabase.');
+  if (!error) return;
+  const code = String(error.code || '');
+  const message = String(error.message || '');
+  if (code === 'email_address_not_authorized' || /email.*not authorized/i.test(message)) {
+    throw new Error('O serviço de e-mail do Supabase não permite enviar para este endereço. O responsável pelo projeto precisa configurar um provedor SMTP em Authentication. Isso não significa que sua conta não existe.');
+  }
+  if (['over_email_send_rate_limit', 'over_request_rate_limit'].includes(code) || error.status === 429) {
+    throw new Error('O Supabase atingiu o limite de solicitações ou envios de e-mail. Aguarde antes de tentar novamente. Consulte Authentication > Logs para identificar o limite.');
+  }
+  if (/smtp|sending.*email|send.*email/i.test(message) || error.status >= 500) {
+    throw new Error('O Supabase não conseguiu enviar o e-mail. O responsável pelo projeto deve conferir o provedor SMTP e o erro em Authentication > Logs.');
+  }
+  if (/fetch|network/i.test(message)) {
+    throw new Error('Não foi possível conectar ao Supabase. Confira sua conexão e tente novamente.');
+  }
+  const reference = /^[a-z0-9_]+$/i.test(code) ? code : (error.status || 'sem código');
+  throw new Error('Não foi possível solicitar a recuperação de senha. Código: '+reference+'. Confira o registro em Authentication > Logs.');
 }
