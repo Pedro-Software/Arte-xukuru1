@@ -1,4 +1,5 @@
 import { resolveLocalImage } from './services/localImages.js';
+import { openAccessibleDialog, closeAccessibleDialog, retainCartFocus, announce } from './services/accessibility.js';
 /* ==========================================================================
    ARTE XUKURU DO ORORUBÁ - APLICAÇÃO JAVASCRIPT PRINCIPAL
    Disposição do Catálogo e Carrinho (Sua Sacola) conforme projeto acadêmico
@@ -267,7 +268,7 @@ const UI = {
 
     if (items.length === 0) {
       grid.innerHTML = `
-        <div class="catalog-empty-state">
+        <div class="catalog-empty-state" role="listitem">
           <div class="empty-icon">🔍</div>
           <h3>${XUKURU_PRODUCTS.length ? 'Nenhuma referência encontrada' : 'Nenhum produto disponível'}</h3>
           <p>${XUKURU_PRODUCTS.length ? 'Tente ajustar os filtros de categoria, faixa de valores ou termo de pesquisa.' : 'Não há produtos para exibir no momento. Se houver um aviso de conexão acima, atualize a página para tentar novamente.'}</p>
@@ -293,7 +294,7 @@ const UI = {
       : '';
 
     return `
-      <article class="demonstrative-catalog-card" data-id="${e(p.id)}" role="article" aria-label="${e(p.title)}">
+      <article class="demonstrative-catalog-card" data-id="${e(p.id)}" role="listitem" aria-label="${e(p.title)}">
         <div class="catalog-card-image-box">
           <div class="card-badges-row">
             <span class="product-tag badge-referencia">Produto</span>
@@ -305,9 +306,9 @@ const UI = {
         <!-- Conteúdo do Card -->
         <div class="catalog-card-content">
           <div class="catalog-card-theme">${e(themeLabel)}</div>
-          <h2 class="catalog-card-title">
+          <${AppState.currentPage === 'home' ? 'h3' : 'h2'} class="catalog-card-title">
             <a href="#" data-open-product="${e(p.id)}">${e(p.title)}</a>
-          </h2>
+          </${AppState.currentPage === 'home' ? 'h3' : 'h2'}>
           <p class="catalog-card-description">
             ${e(p.description)}
           </p>
@@ -318,7 +319,7 @@ const UI = {
               <span class="card-price-label">Valor de referência</span>
               <span class="card-price-value">${Utils.formatCurrency(p.price)}</span>
             </div>
-            <button type="button" class="btn-card-view-item" data-open-product="${p.id}">
+            <button type="button" class="btn-card-view-item" data-open-product="${e(p.id)}" aria-label="Ver item: ${e(p.title)}" aria-haspopup="dialog">
               Ver item &rarr;
             </button>
           </div>
@@ -365,7 +366,7 @@ const UI = {
     // Se estiver vazio
     if (AppState.cart.length === 0) {
       list.innerHTML = `
-        <div class="cart-empty-message-box">
+        <div class="cart-empty-message-box" role="listitem">
           <div style="font-size:3rem; margin-bottom:1rem;">🛒</div>
           <h3 style="font-family:'Cinzel',serif; color:var(--color-primary); margin-bottom:0.5rem;">Sua sacola está vazia</h3>
           <p style="color:#666; margin-bottom:1.5rem;">Você ainda não adicionou nenhuma referência demonstrativa.</p>
@@ -387,7 +388,7 @@ const UI = {
         : '';
 
       return `
-        <article class="cart-item-row" data-cart-item="${e(item.id)}">
+        <article class="cart-item-row" data-cart-item="${e(item.id)}" role="listitem">
           <div class="cart-item-photo-wrapper">
             <div class="cart-item-photo-frame">
               ${Utils.safeImageUrl(item.image) ? `<img src="${e(Utils.safeImageUrl(item.image))}" alt="${e(item.imageAlt || item.title)}" loading="lazy" />` : Utils.getPendingPhotoSVG('cart')}
@@ -452,15 +453,15 @@ const UI = {
 
     // Eventos dos botões da sacola
     list.querySelectorAll('[data-cart-decr]').forEach(btn => {
-      btn.addEventListener('click', () => Cart.updateQty(btn.dataset.cartDecr, -1));
+      btn.addEventListener('click', () => retainCartFocus(btn, () => Cart.updateQty(btn.dataset.cartDecr, -1)));
     });
 
     list.querySelectorAll('[data-cart-incr]').forEach(btn => {
-      btn.addEventListener('click', () => Cart.updateQty(btn.dataset.cartIncr, 1));
+      btn.addEventListener('click', () => retainCartFocus(btn, () => Cart.updateQty(btn.dataset.cartIncr, 1)));
     });
 
     list.querySelectorAll('[data-cart-remove]').forEach(btn => {
-      btn.addEventListener('click', () => Cart.remove(btn.dataset.cartRemove));
+      btn.addEventListener('click', () => retainCartFocus(btn, () => Cart.remove(btn.dataset.cartRemove)));
     });
 
     list.querySelectorAll('[data-open-product]').forEach(btn => {
@@ -494,7 +495,7 @@ const UI = {
         </div>
         <div class="modal-product-info">
           <div class="modal-category-tag">${e(p.categoryName)}</div>
-          <h2 class="modal-product-title">${e(p.title)}</h2>
+          <h2 class="modal-product-title" id="product-dialog-title">${e(p.title)}</h2>
           <div class="modal-artisan-village">
             <span>🏷️</span>
             <strong>${e(p.artisan)}</strong> — ${e(p.village)}
@@ -531,8 +532,8 @@ const UI = {
       </div>
     `;
 
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    modal.setAttribute('aria-labelledby', 'product-dialog-title');
+    openAccessibleDialog(modal);
 
     document.getElementById('modal-add-to-cart-action').addEventListener('click', () => {
       Cart.add(p.id, 1);
@@ -545,8 +546,7 @@ const UI = {
 
   closeProductModal() {
     const modal = document.getElementById('product-modal-backdrop');
-    if (modal) modal.classList.remove('open');
-    document.body.style.overflow = '';
+    closeAccessibleDialog(modal);
     AppState.openProductId = null;
   },
 
@@ -557,24 +557,44 @@ const UI = {
     const count = AppState.cartCount;
     badge.textContent = count;
     badge.style.display = count > 0 ? 'flex' : 'none';
+    document.getElementById('cart-btn')?.setAttribute('aria-label', `Abrir sacola de compras, ${count} ${count === 1 ? 'item' : 'itens'}`);
+    announce(`Sacola com ${count} ${count === 1 ? 'item' : 'itens'}.`);
   },
 
   // ----- NAVEGAÇÃO DE PÁGINAS -----
-  navigateTo(page) {
+  navigateTo(page, moveFocus = true) {
+    if (!['home', 'catalog', 'cart', 'history', 'about'].includes(page)) return;
     AppState.currentPage = page;
 
     document.querySelectorAll('.page-section').forEach(sec => {
       sec.style.display = sec.id === `page-${page}` ? 'block' : 'none';
+      sec.hidden = sec.id !== `page-${page}`;
     });
 
     document.querySelectorAll('.nav-link').forEach(link => {
       link.classList.toggle('active', link.dataset.page === page);
+      if (link.dataset.page === page) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
     });
 
     const navLinks = document.getElementById('nav-links');
     if (navLinks) navLinks.classList.remove('mobile-open');
+    const menu = document.getElementById('mobile-menu-btn');
+    menu?.setAttribute('aria-expanded', 'false');
+    menu?.setAttribute('aria-label', 'Abrir menu');
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const current = document.getElementById(`page-${page}`);
+    const heading = current.querySelector('h1');
+    if (heading) {
+      heading.tabIndex = -1;
+      if (!heading.id) heading.id = `${page}-heading`;
+      current.setAttribute('aria-labelledby', heading.id);
+      if (moveFocus) heading.focus({ preventScroll: true });
+    }
+    const names = { home: 'Início', catalog: 'Catálogo', cart: 'Sacola', history: 'Nossa história', about: 'Sobre' };
+    document.title = `${names[page]} | Arte Xukuru do Ororubá`;
+    document.getElementById('skip-content')?.setAttribute('href', `#page-${page}`);
 
     if (page === 'catalog') {
       this.renderCatalog();
@@ -614,9 +634,13 @@ const UI = {
     if (sortSel) sortSel.value = 'destaque';
     if (featCb) featCb.checked = false;
     if (headerSearch) headerSearch.value = '';
+    document.getElementById('price-filter-error').hidden = true;
+    pMin?.removeAttribute('aria-invalid');
+    pMax?.removeAttribute('aria-invalid');
 
     this.renderCatalog();
     Toast.show('Filtros restaurados.');
+    sIn?.focus();
   }
 };
 
@@ -655,20 +679,17 @@ const Checkout = {
       </div>
     `;
 
-    modal.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    openAccessibleDialog(modal);
 
     document.getElementById('btn-close-checkout-sim').addEventListener('click', () => {
-      modal.classList.remove('open');
-      document.body.style.overflow = '';
+      this.close();
       Toast.show('Demonstração concluída com sucesso!');
     });
   },
 
   close() {
     const modal = document.getElementById('checkout-modal-backdrop');
-    if (modal) modal.classList.remove('open');
-    document.body.style.overflow = '';
+    closeAccessibleDialog(modal);
   }
 };
 
@@ -752,6 +773,22 @@ async function initApp() {
   const btnClear = document.getElementById('catalog-clear-btn');
 
   const applyCurrentFilters = () => {
+    const error = document.getElementById('price-filter-error');
+    const min = filterPMin?.value.trim() || '';
+    const max = filterPMax?.value.trim() || '';
+    const invalidMin = filterPMin?.validity.badInput || (min !== '' && (!Number.isFinite(Number(min)) || Number(min) < 0));
+    const invalidMax = filterPMax?.validity.badInput || (max !== '' && (!Number.isFinite(Number(max)) || Number(max) < 0));
+    const reversed = min !== '' && max !== '' && Number(min) > Number(max);
+    filterPMin?.setAttribute('aria-invalid', String(Boolean(invalidMin || reversed)));
+    filterPMax?.setAttribute('aria-invalid', String(Boolean(invalidMax || reversed)));
+    if (invalidMin || invalidMax || reversed) {
+      error.hidden = false;
+      error.textContent = reversed ? 'O valor máximo deve ser maior ou igual ao mínimo.' : 'Informe valores iguais ou maiores que zero, ou deixe os campos vazios.';
+      (invalidMin ? filterPMin : filterPMax)?.focus();
+      return;
+    }
+    error.hidden = true;
+    error.textContent = '';
     AppState.filters.search = filterSearch ? filterSearch.value : '';
     AppState.filters.category = filterCat ? filterCat.value : 'todos';
     AppState.filters.minPrice = filterPMin ? filterPMin.value : '';
@@ -768,9 +805,13 @@ async function initApp() {
   if (filterSort) filterSort.addEventListener('change', applyCurrentFilters);
   if (filterFeat) filterFeat.addEventListener('change', applyCurrentFilters);
   if (filterSearch) {
+    let searchTimer;
     filterSearch.addEventListener('input', () => {
-      AppState.filters.search = filterSearch.value;
-      UI.renderCatalog();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        AppState.filters.search = filterSearch.value;
+        UI.renderCatalog();
+      }, 250);
     });
   }
 
@@ -796,6 +837,8 @@ async function initApp() {
   if (cepInput) {
     cepInput.addEventListener('input', () => {
       cepInput.value = Utils.formatCEP(cepInput.value);
+      cepInput.removeAttribute('aria-invalid');
+      if (cepStatus) cepStatus.textContent = '';
     });
   }
 
@@ -805,11 +848,14 @@ async function initApp() {
       cepStatus.style.display = 'block';
 
       if (clean.length === 8) {
+        cepInput.setAttribute('aria-invalid', 'false');
         cepStatus.className = 'cart-cep-status success';
         cepStatus.textContent = '✓ Formato de CEP válido (' + Utils.formatCEP(clean) + '). Cotação de frete indisponível.';
       } else {
+        cepInput.setAttribute('aria-invalid', 'true');
         cepStatus.className = 'cart-cep-status error';
         cepStatus.textContent = 'Informe um CEP válido com 8 dígitos (ex: 55200-000).';
+        cepInput.focus();
       }
     });
   }
@@ -818,7 +864,9 @@ async function initApp() {
   const navLinks = document.getElementById('nav-links');
   if (mobileMenuBtn && navLinks) {
     mobileMenuBtn.addEventListener('click', () => {
-      navLinks.classList.toggle('mobile-open');
+      const open = navLinks.classList.toggle('mobile-open');
+      mobileMenuBtn.setAttribute('aria-expanded', String(open));
+      mobileMenuBtn.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
     });
   }
 
@@ -840,10 +888,16 @@ async function initApp() {
     if (e.key === 'Escape') {
       UI.closeProductModal();
       Checkout.close();
+      if (navLinks?.classList.contains('mobile-open')) {
+        navLinks.classList.remove('mobile-open');
+        mobileMenuBtn.setAttribute('aria-expanded', 'false');
+        mobileMenuBtn.setAttribute('aria-label', 'Abrir menu');
+        mobileMenuBtn.focus();
+      }
     }
   });
 
-  UI.navigateTo('home');
+  UI.navigateTo('home', false);
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp, { once: true });

@@ -548,7 +548,7 @@ button {
   font-size: 1.4rem;
 }
 
-.trust-text h4 {
+.trust-text :is(h4,.trust-heading) {
   font-family: 'Outfit', sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
@@ -1888,7 +1888,7 @@ button {
   object-fit: cover;
 }
 
-.story-content h3 {
+.story-content :is(h2,h3) {
   font-size: 2rem;
   margin-bottom: 1.25rem;
 }
@@ -2024,7 +2024,7 @@ button {
   font-size: 1.75rem;
 }
 
-.value-card h4 {
+.value-card :is(h4,.value-heading) {
   font-size: 1.3rem;
   margin-bottom: 0.75rem;
 }
